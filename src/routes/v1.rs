@@ -4,6 +4,10 @@ use crate::{handlers, state::AppState};
 
 pub fn router() -> Router<AppState> {
   Router::new()
+    .nest(
+      "/auth",
+      Router::new().route("/login", routing::post(handlers::auth::login)),
+    )
     .route(
       "/todos",
       routing::get(handlers::todo::list_todos).post(handlers::todo::create_todo),

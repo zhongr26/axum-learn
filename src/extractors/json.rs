@@ -6,9 +6,9 @@ use axum::{
 
 use crate::error::AppError;
 
-/// 包装 axum 的 Json extractor：反序列化失败时返回统一的 JSON 错误体，
-/// 而不是 axum 默认的纯文本（"Failed to deserialize the JSON body..."）。
-/// 用法：`AppJson(req): AppJson<CreateTodo>`
+/// axum 默认的 Json 拒绝格式是纯文本，和我们的错误 JSON 不统一。
+/// AppJson 包装后：反序列化失败 -> AppError::Validation -> 统一错误体。
+/// 用法：Json(req): AppJson<CreateTodoRequest>
 pub struct AppJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppJson<T>

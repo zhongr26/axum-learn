@@ -153,7 +153,10 @@ todo-api 项目按概念拆为 5 个递进阶段（每阶段引入概念是下�
   // 1. AtomicU64::default()=0 且 fetch_add 返回"旧值"再自增 → 第一个 id 会是 0，初始值要设 1
   // 2. axum 默认 rejection 是纯文本（422/400），与 JSON 错误体不统一：
   //    用 AppJson/AppPath 包装 extractor，把 e.body_text() 转成 AppError::validation
-  // 3. axum 0.8 的 FromRequestParts/FromRequest 已用原生 async fn，不要再加 #[async_trait]
+  // 3. axum 0.8 的 FromRequestParts/FromRequest 已用原生 async fn，不要再加 #[async_trait]，
+  //    也不要手写 impl Future<Output=...> 返回类型（trait 自带 RPITIT）
   // 4. Windows 下旧进程未杀时 cargo build 报 os error 5（exe 被锁），curl 打到的是旧代码
+  // 5. login 挂载：nest("/auth", Router::new().route("/login", post(login)))
+  //    login 公开（无 AuthUser 参数）；写接口有 AuthUser 参数即受保护（401 提取即鉴权）
   ```
 - [ ] 阶段 5 · 可测试性与工程化：lib.rs+main.rs 拆分、build_app()、oneshot 集成测试、优雅停机、内存 store 抽 trait（通往 sqlx/Redis 的桥）

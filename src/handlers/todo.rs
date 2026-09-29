@@ -8,7 +8,7 @@ use axum_macros::debug_handler;
 
 use crate::{
   error::AppError,
-  extractors::{json::AppJson, path::AppPath},
+  extractors::{auth::AuthUser, json::AppJson, path::AppPath},
   models::todo::{CreateTodo, ListQuery, TodoResponse, UpdateTodo},
   state::AppState,
 };
@@ -46,9 +46,11 @@ pub async fn get_todo(
 /// POST /api/v1/todos -> 201 Created
 #[debug_handler]
 pub async fn create_todo(
+  user: AuthUser,
   State(state): State<AppState>,
   AppJson(req): AppJson<CreateTodo>,
 ) -> Result<(StatusCode, Json<TodoResponse>), AppError> {
+  tracing::debug!(user=%user.username,"create todo");
   req.validate()?;
   if state.todos.has_title(&req.title)? == true {
     return Err(AppError::conflict(format!(
@@ -62,10 +64,12 @@ pub async fn create_todo(
 /// PATCH /api/v1/todos/{id}
 #[debug_handler]
 pub async fn update_todo(
+  user: AuthUser,
   State(state): State<AppState>,
   AppPath(id): AppPath<u64>,
   AppJson(req): AppJson<UpdateTodo>,
 ) -> Result<Json<TodoResponse>, AppError> {
+  tracing::debug!(user=%user.username,"create todo");
   req.validate()?;
   if let Some(title) = &req.title {
     if state.todos.has_title(&title)? == true {
@@ -81,9 +85,11 @@ pub async fn update_todo(
 /// DELETE /api/v1/todos/{id} -> 204 No Content 无body
 #[debug_handler]
 pub async fn delete_todo(
+  user: AuthUser,
   State(state): State<AppState>,
   AppPath(id): AppPath<u64>,
 ) -> Result<StatusCode, AppError> {
+  tracing::debug!(user=%user.username,"create todo");
   state.todos.delete(id)?;
   Ok(StatusCode::NO_CONTENT)
 }
