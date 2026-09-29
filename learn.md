@@ -119,6 +119,18 @@ todo-api 项目按概念拆为 5 个递进阶段（每阶段引入概念是下�
   //   #[utoipa::path]   OpenAPI 文档，最接近注解体验
   ```
 - [ ] 阶段 2 · 错误处理：AppError + IntoResponse + From 链让 `?` 传播；404/400/422 语义
-- [ ] 阶段 3 · State 与数据形态：Arc<AppState>、with_state、RwLock 取舍、DTO 分离、分页、FromStr 做 Path
+- [~] 阶段 3 · State 与数据形态（对标 broccoli-master server 架构）
+  ```rust
+  // AppState：Clone 结构体装廉价句柄（连接池/Arc），替代全局单例；with_state 注入，handler 用 State<T> 提取
+  #[derive(Clone)] pub struct AppState { pub todos: TodoStore /*, 阶段5: db: DatabaseConnection */ }
+
+  // 分层（broccoli 同构）：entity/表模型 → store/数据访问 → handlers/controller → models/DTO
+  // 换 DB 只动 entity + store，handler 一行不改
+
+  // REST 规范：/api/v1 前缀 + 复数资源；POST→201；DELETE→204 无 body；局部更新 PATCH
+  // 成功无包装直接 Json<DTO>；错误才包装 {"code":"SCREAMING_SNAKE","message":...}
+  // 分页：?page=1&per_page=20（serde default 函数），总数放 X-Total-Count 响应头
+  Ok(([(header::X_TOTAL_COUNT, total.to_string())], Json(data)))  // 响应头+body 元组
+  ```
 - [ ] 阶段 4 · 中间件与认证：from_fn(_with_state)、洋葱顺序、route_layer、Extension、tower-http 三件套
 - [ ] 阶段 5 · 可测试性与工程化：lib.rs+main.rs 拆分、build_app()、oneshot 集成测试、优雅停机、内存 store 抽 trait（通往 sqlx/Redis 的桥）

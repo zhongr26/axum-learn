@@ -41,7 +41,7 @@ pub fn router() -> Router<()> {
     Router::new()
         // 一条路径可以绑定多个方法
         .route("/", get(list).post(create))
-        .route("/:id", get(get_one))
+        .route("/{id}", get(get_one))
 }
 
 // GET /api/todos?done=false

@@ -1,4 +1,10 @@
+mod entity;
+mod error;
+mod models;
+mod repository;
+mod response;
 mod routes;
+mod service;
 
 use axum::{Router, http::StatusCode, routing::get};
 
@@ -9,15 +15,15 @@ use axum::{Router, http::StatusCode, routing::get};
 /// 4. tokio::net::TcpListener + axum::serve
 #[tokio::main]
 async fn main() {
-    let app = Router::new()
-        .route("/", get(|| async { "Hello, World" }))
-        .nest("/api/todos", routes::todos::router())
-        .nest("/api/health", routes::health::router())
-        // 没有任何一个路由匹配到时
-        .fallback(|| async { (StatusCode::NOT_FOUND, "route not found") });
+  let app = Router::new()
+    .route("/", get(|| async { "Hello, World" }))
+    .nest("/api/todos", routes::todo::router())
+    .nest("/api/health", routes::health::router())
+    // 没有任何一个路由匹配到时
+    .fallback(|| async { (StatusCode::NOT_FOUND, "route not found") });
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Listening on https://127.0.0.1:3000");
+  let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+  println!("Listening on https://127.0.0.1:3000");
 
-    axum::serve(listener, app).await.unwrap();
+  axum::serve(listener, app).await.unwrap();
 }

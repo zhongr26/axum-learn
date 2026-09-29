@@ -1,0 +1,4 @@
+tab_spaces = 2       # 缩进2空格
+hard_tabs = false    # 使用空格，不是\t制表符
+max_width = 100
+edition = "2021"
