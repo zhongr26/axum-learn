@@ -132,5 +132,28 @@ todo-api 项目按概念拆为 5 个递进阶段（每阶段引入概念是下�
   // 分页：?page=1&per_page=20（serde default 函数），总数放 X-Total-Count 响应头
   Ok(([(header::X_TOTAL_COUNT, total.to_string())], Json(data)))  // 响应头+body 元组
   ```
-- [ ] 阶段 4 · 中间件与认证：from_fn(_with_state)、洋葱顺序、route_layer、Extension、tower-http 三件套
+- [~] 阶段 4 · 中间件与认证（broccoli：extractors/ + middleware/ 目录）
+  ```rust
+  // 提取即鉴权：FromRequestParts extractor，handler 参数里出现 AuthUser 即要求登录
+  pub struct AuthUser { pub username: String }
+  #[async_trait] impl FromRequestParts<AppState> for AuthUser {
+      type Rejection = Response;   // 校验失败直接回 401 响应，handler 不执行
+      async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Response> { ... }
+  }
+  // FromRequestParts：只读 headers/uri（无 body）；FromRequest：可消费 body（AppJson<T>）
+  // AppJson<T>：接管 Json 反序列化拒绝，统一为 AppError::Validation JSON
+  // extractor 做按接口鉴权；横切所有请求（日志/限流/超时）用 middleware/layer：
+  .layer(axum::middleware::from_fn(request_log))   // Request 进 -> next.run(req) -> Response 出
+  .layer(TimeoutLayer::new(Duration::from_secs(10))).layer(CorsLayer::permissive())
+  // 洋葱模型：后 .layer() 在外层；自定义 HeaderName 用 HeaderName::from_static("x-total-count")
+  ```
+
+#### 踩坑记录（阶段 3→4 修复）
+  ```rust
+  // 1. AtomicU64::default()=0 且 fetch_add 返回"旧值"再自增 → 第一个 id 会是 0，初始值要设 1
+  // 2. axum 默认 rejection 是纯文本（422/400），与 JSON 错误体不统一：
+  //    用 AppJson/AppPath 包装 extractor，把 e.body_text() 转成 AppError::validation
+  // 3. axum 0.8 的 FromRequestParts/FromRequest 已用原生 async fn，不要再加 #[async_trait]
+  // 4. Windows 下旧进程未杀时 cargo build 报 os error 5（exe 被锁），curl 打到的是旧代码
+  ```
 - [ ] 阶段 5 · 可测试性与工程化：lib.rs+main.rs 拆分、build_app()、oneshot 集成测试、优雅停机、内存 store 抽 trait（通往 sqlx/Redis 的桥）
