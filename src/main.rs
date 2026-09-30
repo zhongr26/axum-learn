@@ -1,20 +1,5 @@
-mod entity;
-mod error;
-mod extractors;
-mod handlers;
-mod middleware;
-mod models;
-mod routes;
-mod state;
-mod store;
-
-use std::time::Duration;
-
-use axum::{Json, Router, http::StatusCode, routing::get};
-use serde_json::json;
-use tower_http::{cors::CorsLayer, timeout::TimeoutLayer, trace::TraceLayer};
-
-use crate::{
+use axum_learn::{
+  build_app,
   state::{AppState, Config},
   store::todo::TodoStore,
 };
@@ -38,31 +23,21 @@ async fn main() {
     config: Config::dev(),
   };
 
-  let app = Router::new()
-    .nest("/api/v1", routes::v1::router())
-    .route("/", get(|| async { "Todo API (stage 4)" }))
-    .fallback(|| async {
-      (
-        StatusCode::NOT_FOUND,
-        Json(json!({
-          "code":"NOT_FOUND",
-          "message": "route not found"
-        })),
-      )
-    })
-    .with_state(state)
-    .layer(axum::middleware::from_fn(
-      middleware::request_log::request_log,
-    ))
-    .layer(TraceLayer::new_for_http())
-    .layer(TimeoutLayer::with_status_code(
-      StatusCode::REQUEST_TIMEOUT,
-      Duration::from_secs(10),
-    ))
-    .layer(CorsLayer::permissive());
+  let app = build_app(state);
 
   let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
   println!("Listening on https://127.0.0.1:3000");
 
-  axum::serve(listener, app).await.unwrap();
+  axum::serve(listener, app)
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .unwrap();
+}
+
+/// 优雅停机， Ctrl+C 停止接收新链接，等在途请求完成再退出
+async fn shutdown_signal() {
+  tokio::signal::ctrl_c()
+    .await
+    .expect("failed to listen for ctrl_c");
+  println!("shutting down gracefully")
 }

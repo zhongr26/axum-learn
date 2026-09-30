@@ -159,4 +159,31 @@ todo-api 项目按概念拆为 5 个递进阶段（每阶段引入概念是下�
   // 5. login 挂载：nest("/auth", Router::new().route("/login", post(login)))
   //    login 公开（无 AuthUser 参数）；写接口有 AuthUser 参数即受保护（401 提取即鉴权）
   ```
-- [ ] 阶段 5 · 可测试性与工程化：lib.rs+main.rs 拆分、build_app()、oneshot 集成测试、优雅停机、内存 store 抽 trait（通往 sqlx/Redis 的桥）
+- [~] 阶段 5 · 可测试性与工程化：lib.rs+main.rs 拆分、build_app()、oneshot 集成测试、优雅停机、内存 store 抽 trait（通往 sqlx/Redis 的桥）
+  ```rust
+  // lib.rs: pub mod 全公开 + pub fn build_app(state) -> Router（组装与运行分离）
+  // main.rs 只做：init tracing -> 构造 state -> build_app -> serve + with_graceful_shutdown(ctrl_c)
+  // 测试：tower::ServiceExt::oneshot(app, request) 直打 Router 不起端口；
+  //   Router.clone() 廉价（Arc 内核），每个测试独立 app() 实现隔离
+  //   http_body_util::BodyExt::collect() 读 body
+  // 回归测试锁住历史修复：id 从 1 开始、错误体统一 JSON、401/204 语义
+
+  // 下一阶段路线（对标 broccoli）：1 SeaORM+PG(软删除) → 2 JWT+argon2
+  //   → 3 utoipa OpenAPI → 4 Redis 队列+worker(lease/DLQ/幂等) → 5 BlobStore trait DI → 6 WASM 插件
+  ```
+
+## 下一期：6.1 / 6.2 / 6.3 / 6.5（已开启）
+
+- [~] 6.1 SeaORM + PG：
+  ```rust
+  // entity 一表一文件：#[derive(DeriveEntityModel)] Model 字段=列；deleted_at 软删除
+  // 查询过滤 DeletedAt.is_null()，删除 = UPDATE deleted_at
+  Entity::find().filter(Column::DeletedAt.is_null()).offset(o).limit(n).all(db).await?
+  let mut am: ActiveModel = model.into(); am.title = Set(t); am.update(db).await?
+  // 迁移代码即 schema：sea_orm_migration Table::create + Migrator::up(db, None) 启动时 auto-sync
+  ```
+- [~] 6.2 JWT + argon2：Claims{sub,exp,fresh}，jsonwebtoken exp 自动校验；argon2 hash/verify；AuthUser 校验段换 jwt::verify 解码 claims
+- [~] 6.3 utoipa：utoipa_axum OpenApiRouter + routes!(handler) 路由文档同源；#[utoipa::path]；SwaggerUi 挂 /swagger-ui；split_for_parts
+- [~] 6.5 BlobStore：object-safe trait(Send+Sync) + Arc<dyn BlobStore> 注入；实现防路径穿越/NotFound 容错；测试可换内存实现
+- 6.4 Redis 队列暂缓
+- 修复记录：AppJson/AppPath rejection 必须保留 e.status()（语法错=400，缺字段/类型错=422），不能一律转 validation(400)——集成测试锁住该语义

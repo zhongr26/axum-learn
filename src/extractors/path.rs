@@ -3,7 +3,7 @@ use axum::{
   response::{IntoResponse, Response},
 };
 
-use crate::error::AppError;
+use crate::extractors::json::rejection_response;
 
 /// 包装 Path extractor：路径参数解析失败（如 /todos/abc）时返回统一 JSON 错误体，
 /// 而不是 axum 默认的纯文本 400。
@@ -22,7 +22,7 @@ where
   ) -> Result<Self, Self::Rejection> {
     let Path(value) = Path::<T>::from_request_parts(parts, state)
       .await
-      .map_err(|e| AppError::validation(e.body_text()).into_response())?;
+      .map_err(|e| rejection_response(e.status(), e.body_text()))?;
     Ok(AppPath(value))
   }
 }

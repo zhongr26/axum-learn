@@ -98,6 +98,7 @@ dependencies = [
  "axum",
  "axum-macros",
  "chrono",
+ "http-body-util",
  "serde",
  "serde_json",
  "thiserror",

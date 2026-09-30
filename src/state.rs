@@ -15,8 +15,6 @@ pub struct Config {
 
 impl Config {
   pub fn dev() -> Self {
-    Self {
-      auth_token: "secret-token".to_string(),
-    }
+    Config::from_env()
   }
 }
