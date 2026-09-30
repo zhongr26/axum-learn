@@ -1,6 +1,6 @@
 use axum::{
   extract::{FromRequestParts, path::Path},
-  response::{IntoResponse, Response},
+  response::Response,
 };
 
 use crate::extractors::json::rejection_response;

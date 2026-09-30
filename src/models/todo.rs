@@ -1,22 +1,25 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 
-use crate::{entity::todo::Todo, error::AppError};
+use crate::{entity::todo, error::AppError};
 
-#[derive(Debug, Deserialize)]
+type Todo = todo::Model;
+
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateTodo {
   pub title: String,
   pub description: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTodo {
   pub title: Option<String>,
   pub description: Option<String>,
   pub done: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema, IntoParams)]
 pub struct ListQuery {
   pub done: Option<bool>,
   #[serde(default = "default_page")]
@@ -25,9 +28,9 @@ pub struct ListQuery {
   pub per_page: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct TodoResponse {
-  pub id: u64,
+  pub id: i64,
   pub title: String,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub description: Option<String>,
@@ -45,11 +48,11 @@ fn default_per_page() -> u64 {
 impl From<Todo> for TodoResponse {
   fn from(t: Todo) -> Self {
     Self {
-      id: t.id,
+      id: t.id as i64,
       title: t.title,
       description: t.description,
       done: t.done,
-      created_at: t.created_at,
+      created_at: t.created_at.into(),
     }
   }
 }

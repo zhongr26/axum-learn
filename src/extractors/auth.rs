@@ -8,16 +8,14 @@ use serde_json::json;
 
 use crate::state::AppState;
 
-/// 提取即鉴权：handler 参数里出现 AuthUser 即要求 Bearer token，
+/// 提取即鉴权：handler 参数里出现 AuthUser 即要求有效 Bearer JWT，
 /// 校验失败返回 401，handler 不会执行。
 pub struct AuthUser {
   pub username: String,
 }
 
-// axum 0.8：trait 内直接 async fn（原生 RPITIT），不需要 #[async_trait]、
-// 也不需要手写 impl Future 返回类型
 impl FromRequestParts<AppState> for AuthUser {
-  type Rejection = Response; // 拒绝后直接给响应
+  type Rejection = Response;
 
   async fn from_request_parts(
     parts: &mut Parts,
@@ -30,19 +28,20 @@ impl FromRequestParts<AppState> for AuthUser {
       .and_then(|v| v.strip_prefix("Bearer "));
 
     match token {
-      Some(t) if t == state.config.auth_token => Ok(AuthUser {
-        username: "alice".into(),
-      }),
-      _ => Err(
-        (
-          StatusCode::UNAUTHORIZED,
-          Json(json!({
-            "code": "UNAUTHORIZED",
-            "message": "missing or invalid token"
-          })),
-        )
-          .into_response(),
-      ),
+      // JWT 过期/签名错误由 exp 自动校验兜住
+      Some(t) => match crate::utils::jwt::verify(t, &state.config.jwt_secret) {
+        Some(claims) => Ok(AuthUser { username: claims.sub }),
+        None => Err(unauthorized("invalid or expired token")),
+      },
+      None => Err(unauthorized("missing or invalid token")),
     }
   }
+}
+
+fn unauthorized(message: &str) -> Response {
+  (
+    StatusCode::UNAUTHORIZED,
+    Json(json!({ "code": "UNAUTHORIZED", "message": message })),
+  )
+    .into_response()
 }

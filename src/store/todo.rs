@@ -1,111 +1,86 @@
-use std::{
-  collections::HashMap,
-  sync::{
-    Arc, RwLock,
-    atomic::{AtomicU64, Ordering},
-  },
+use sea_orm::{
+  ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
+  PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
+use chrono::Utc;
 
 use crate::{
-  entity::todo::Todo,
+  entity::todo::{self, ActiveModel, Column, Entity},
   error::AppError,
   models::todo::{CreateTodo, UpdateTodo},
 };
 
-#[derive(Clone)]
-pub struct TodoStore {
-  next_id: Arc<AtomicU64>,
-  store: Arc<RwLock<HashMap<u64, Todo>>>,
+pub type Db = DatabaseConnection;
+
+pub async fn list(
+  db: &Db,
+  done: Option<bool>,
+  page: u64,
+  per_page: u64,
+) -> Result<(Vec<todo::Model>, u64), AppError> {
+  let mut cond = Column::DeletedAt.is_null();
+  if let Some(done) = done {
+    cond = cond.and(Column::Done.eq(done));
+  }
+  let finder = Entity::find().filter(cond);
+  let total = finder.clone().count(db).await?;
+
+  let items = finder
+    .order_by_asc(Column::Id)
+    .offset(page.saturating_sub(1) * per_page)
+    .limit(per_page)
+    .all(db)
+    .await?;
+
+  Ok((items, total))
 }
 
-impl TodoStore {
-  pub fn new() -> Self {
-    // ID 从 1 开始：fetch_add 返回旧值再自增，初始值 0 会导致第一个 id 为 0
-    Self {
-      next_id: Arc::new(AtomicU64::new(1)),
-      store: Arc::default(),
-    }
-  }
+pub async fn get(db: &Db, id: i32) -> Result<todo::Model, AppError> {
+  Entity::find_by_id(id)
+    .filter(Column::DeletedAt.is_null())
+    .one(db)
+    .await?
+    .ok_or(AppError::todo_not_found(id as u64))
+}
 
-  pub fn next_id(&self) -> u64 {
-    self.next_id.fetch_add(1, Ordering::Relaxed)
-  }
+pub async fn create(db: &Db, req: CreateTodo) -> Result<todo::Model, AppError> {
+  let am = ActiveModel {
+    title: Set(req.title),
+    description: Set(req.description),
+    ..Default::default()
+  };
+  Ok(am.insert(db).await?)
+}
 
-  pub fn list(&self, done: Option<bool>, page: u64, per_page: u64) -> (Vec<Todo>, u64) {
-    let map = self.store.read().unwrap();
-    let mut all: Vec<Todo> = map
-      .values()
-      .filter(|t| done.map_or(true, |d| t.done == d))
-      .cloned()
-      .collect();
-    all.sort_by_key(|t| t.id);
-    let total = all.len() as u64;
-    let page_items = all
-      .into_iter()
-      .skip((page.saturating_sub(1) * per_page) as usize)
-      .take(per_page as usize)
-      .collect();
-    (page_items, total)
+pub async fn update(db: &Db, id: i32, req: UpdateTodo) -> Result<todo::Model, AppError> {
+  let mut am: ActiveModel = get(db, id).await?.into();
+  if let Some(title) = req.title {
+    am.title = Set(title);
   }
-
-  pub fn get(&self, id: u64) -> Result<Todo, AppError> {
-    self
-      .store
-      .read()
-      .unwrap()
-      .get(&id)
-      .cloned()
-      .ok_or(AppError::todo_not_found(id))
+  if let Some(description) = req.description {
+    am.description = Set(Some(description));
   }
-
-  pub fn create(&self, req: CreateTodo) -> Todo {
-    let todo = Todo {
-      id: self.next_id(),
-      title: req.title,
-      description: req.description,
-      done: false,
-      created_at: chrono::Utc::now(),
-    };
-    self.store.write().unwrap().insert(todo.id, todo.clone());
-    todo
+  if let Some(done) = req.done {
+    am.done = Set(done);
   }
+  Ok(am.update(db).await?)
+}
 
-  pub fn update(&self, id: u64, req: UpdateTodo) -> Result<Todo, AppError> {
-    let mut map = self.store.write().unwrap();
-    let todo = map
-      .get_mut(&id)
-      .ok_or(AppError::todo_not_found(id))?;
+/// 软删除：UPDATE deleted_at 而非 DELETE
+pub async fn delete(db: &Db, id: i32) -> Result<(), AppError> {
+  let mut am: ActiveModel = get(db, id).await?.into();
+  am.deleted_at = Set(Some(Utc::now().into()));
+  am.update(db).await?;
+  Ok(())
+}
 
-    if let Some(title) = req.title {
-      todo.title = title;
-    }
-    if let Some(description) = req.description {
-      todo.description = Some(description);
-    }
-    if let Some(done) = req.done {
-      todo.done = done;
-    }
-    Ok(todo.clone())
-  }
-
-  pub fn delete(&self, id: u64) -> Result<(), AppError> {
-    self
-      .store
-      .write()
-      .unwrap()
-      .remove(&id)
-      .map(|_| ())
-      .ok_or_else(|| AppError::todo_not_found(id))
-  }
-
-  pub fn has_title(&self, title: &str) -> Result<bool, AppError> {
-    Ok(
-      self
-        .store
-        .read()
-        .unwrap()
-        .values()
-        .any(|t| t.title == title),
-    )
-  }
+pub async fn has_title(db: &Db, title: &str) -> Result<bool, AppError> {
+  Ok(
+    Entity::find()
+      .filter(Column::DeletedAt.is_null())
+      .filter(Column::Title.eq(title))
+      .one(db)
+      .await?
+      .is_some(),
+  )
 }

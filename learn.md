@@ -187,3 +187,18 @@ todo-api 项目按概念拆为 5 个递进阶段（每阶段引入概念是下�
 - [~] 6.5 BlobStore：object-safe trait(Send+Sync) + Arc<dyn BlobStore> 注入；实现防路径穿越/NotFound 容错；测试可换内存实现
 - 6.4 Redis 队列暂缓
 - 修复记录：AppJson/AppPath rejection 必须保留 e.status()（语法错=400，缺字段/类型错=422），不能一律转 validation(400)——集成测试锁住该语义
+- 6.1/6.2/6.3 落地踩坑：
+  ```text
+  1. utoipa-swagger-ui 编译期会从 GitHub 下载 zip -> features 加 "vendored"（内置静态文件）
+  2. utoipa-swagger-ui 8 的 axum feature 只支持 axum 0.7 -> axum 0.8 用 v9
+  3. SwaggerUi 是 Router<()>：必须在 with_state 之后 merge
+  4. routes! 宏按 #[utoipa::path] 的 path 注册路由 -> path 写完整 /api/v1/...，
+     lib.rs 用 merge 不能 nest（否则 /api/v1/api/v1/...）
+  5. store 层 ? 需要 impl From<sea_orm::DbErr> for AppError -> 归 Internal(500)
+  6. utoipa params() 需要查询 DTO derive IntoParams；chrono 类型要开 utoipa "chrono" feature
+  7. argon2 解析哈希用 PasswordHash::new（结构体），PasswordHasher 是 trait 名
+  8. 集成测试连真库：连不上自动 skip；标题 uuid 唯一；先 login 拿 JWT 再打受保护接口
+  9. 实体主键类型必须匹配迁移列类型：pk_auto 生成 INT4(Serial) -> 实体用 i32 不是 i64，
+     否则解码报 "INT8 not compatible with INT4"；响应 DTO 用 i64 输出（cast）
+  10. 集成测试不能硬编码 id：库里历史数据会让 DELETE /1 返回 404，应创建后用返回的 id
+  ```

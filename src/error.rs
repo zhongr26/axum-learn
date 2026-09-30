@@ -63,3 +63,11 @@ impl AppError {
     }
   }
 }
+
+// 数据库错误归入 Internal（500，细节只进日志）——让 store 层的 ? 直接工作
+impl From<sea_orm::DbErr> for AppError {
+  fn from(e: sea_orm::DbErr) -> Self {
+    Self::Internal(e.into())
+  }
+}
+

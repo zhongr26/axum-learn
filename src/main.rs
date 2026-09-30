@@ -1,14 +1,12 @@
+use std::sync::Arc;
+
 use axum_learn::{
+  blob::local::LocalBlobStore,
   build_app,
   state::{AppState, Config},
-  store::todo::TodoStore,
 };
+use sea_orm_migration::MigratorTrait;
 
-/// axum 的启动套路：
-/// 1. 构造共享状态 AppState（一般用 Arc 包裹）
-/// 2. 用 Router::new() 声明路由，.with_state() 注入状态
-/// 3. 叠加中间件（layer 的执行顺序：后 .layer() 的先执行，即"洋葱模型"外层）
-/// 4. tokio::net::TcpListener + axum::serve
 #[tokio::main]
 async fn main() {
   tracing_subscriber::fmt()
@@ -18,9 +16,24 @@ async fn main() {
     )
     .init();
 
+  let db = sea_orm::Database::connect(
+    &std::env::var("DATABASE_URL")
+      .unwrap_or_else(|_| "postgres://todo:todo@localhost:5432/todo".into()),
+  )
+  .await
+  .unwrap();
+
+  // schema auto-sync：启动时跑迁移，表不存在则创建
+  axum_learn::migration::Migrator::up(&db, None)
+    .await
+    .unwrap();
+
   let state = AppState {
-    todos: TodoStore::new(),
+    db,
     config: Config::dev(),
+    blobs: Arc::new(LocalBlobStore {
+      root: "./data/blobs".into(),
+    }),
   };
 
   let app = build_app(state);

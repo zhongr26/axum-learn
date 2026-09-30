@@ -1,12 +1,15 @@
+pub mod blob;
 pub mod entity;
 pub mod error;
 pub mod extractors;
 pub mod handlers;
 pub mod middleware;
+pub mod migration;
 pub mod models;
 pub mod routes;
 pub mod state;
 pub mod store;
+pub mod utils;
 
 use std::time::Duration;
 
@@ -14,12 +17,18 @@ use axum::{Json, Router, http::StatusCode, routing::get};
 use serde_json::json;
 use tower_http::{cors::CorsLayer, timeout::TimeoutLayer, trace::TraceLayer};
 
-use crate::state::{AppState, Config};
+use crate::state::AppState;
 
 pub fn build_app(state: AppState) -> Router {
+  let (router, openapi) = routes::v1::router().split_for_parts();
+
+  // routes! 注册的路径已含 /api/v1 前缀，这里直接 merge（nest 会变成 /api/v1/api/v1）
+  // SwaggerUi 是 Router<()>，必须在 with_state 之后 merge
   Router::new()
-    .nest("/api/v1", routes::v1::router())
-    .route("/", get(|| async { "Todo API (stage 4)" }))
+    .merge(router)
+    .with_state(state)
+    .route("/", get(|| async { "Todo API" }))
+    .merge(utoipa_swagger_ui::SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi))
     .fallback(|| async {
       (
         StatusCode::NOT_FOUND,
@@ -29,7 +38,6 @@ pub fn build_app(state: AppState) -> Router {
         })),
       )
     })
-    .with_state(state)
     .layer(axum::middleware::from_fn(
       middleware::request_log::request_log,
     ))
@@ -39,12 +47,4 @@ pub fn build_app(state: AppState) -> Router {
       Duration::from_secs(10),
     ))
     .layer(CorsLayer::permissive())
-}
-
-impl Config {
-  pub fn from_env() -> Self {
-    Self {
-      auth_token: std::env::var("AUTH_TOKEN").unwrap_or_else(|_| "secret-token".to_string()),
-    }
-  }
 }
